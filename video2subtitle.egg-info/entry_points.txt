@@ -1,0 +1,2 @@
+[console_scripts]
+video2subtitle = video2subtitle.cli:main
