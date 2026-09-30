@@ -1,5 +1,6 @@
 """Subtitle output formats: SRT / VTT / ASS / TXT."""
 
+import re
 from pathlib import Path
 from typing import Iterable
 
@@ -31,10 +32,11 @@ def _fmt_ass(t: float) -> str:
 
 
 def _clean(segments: Iterable[Segment]):
-    """Normalize spans: skip empty text, fix zero-length cues."""
+    """Normalize spans: skip empty/punctuation-only text, fix zero-length cues."""
     for seg in segments:
         text = (seg.text or "").strip()
-        if not text:
+        # a cue must carry at least one real character (word/CJK/digit)
+        if not text or not re.search(r"[\w\u4e00-\u9fff]", text, re.UNICODE):
             continue
         end = seg.end if seg.end > seg.start else seg.start + 0.5
         yield seg.start, end, text

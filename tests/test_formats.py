@@ -46,3 +46,11 @@ def test_empty_and_zero_span_skipped():
     assert vtt.count("\n\n") == 1  # header separator + single cue
     assert to_ass(segs).count("Dialogue:") == 1
     assert to_txt(segs) == "x\n"
+
+
+def test_punctuation_only_cues_skipped():
+    segs = [Segment(0.0, 1.0, "。"), Segment(1.0, 2.0, ". "), Segment(2.0, 3.5, "真的内容")]
+    srt = to_srt(segs)
+    assert "。" not in srt.replace("真的内容", "")
+    assert "真的内容" in srt
+    assert srt.startswith("1\n00:00:02,000 --> 00:00:03,500\n真的内容\n")

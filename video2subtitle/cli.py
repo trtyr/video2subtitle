@@ -35,6 +35,7 @@ def _fetch_url(url: str, dest_dir: Path) -> Path:
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
+        "noprogress": True,
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
