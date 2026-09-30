@@ -24,3 +24,24 @@ def create_engine(settings: Settings):
             chunk_seconds=settings.chunk_seconds,
         )
     raise ValueError(f"unknown V2S_ENGINE: {name!r} (expected qwen3 | sensevoice)")
+
+
+def engine_matrix(settings: Settings) -> list[dict]:
+    """Per-engine availability rows for /healthz."""
+    from ..model_dl import files_present
+
+    active_key = "qwen3" if settings.engine_name.startswith("qwen3") else "sensevoice"
+    rows = []
+    for name, model_dir, key in (
+        ("qwen3-asr", settings.qwen3_model_dir, "qwen3"),
+        ("sensevoice", settings.sensevoice_model_dir, "sensevoice"),
+    ):
+        rows.append(
+            {
+                "name": name,
+                "model_dir": str(model_dir),
+                "model_downloaded": files_present(model_dir, key),
+                "active": key == active_key,
+            }
+        )
+    return rows

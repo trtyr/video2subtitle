@@ -1,26 +1,321 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>video2subtitle</title>
+<title>video2subtitle — 视频转字幕</title>
 <style>
-  body { font-family: system-ui, -apple-system, sans-serif; max-width: 42rem;
-         margin: 5rem auto; text-align: center; color: #1a1a2e; padding: 0 1rem; }
-  h1 { font-size: 2rem; margin-bottom: .25rem; }
-  p { color: #555; }
-  .badge { display: inline-block; background: #eef; border-radius: 6px;
-           padding: .2rem .6rem; font-size: .85rem; margin: 0 .2rem; }
-  a { color: #3556c8; }
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1d212b; --line: #2a2f3a;
+    --fg: #e8eaf0; --dim: #9aa3b2; --acc: #5b8cff; --ok: #3fb96f; --err: #e5534b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font-family: system-ui, -apple-system, "PingFang SC", sans-serif; }
+  .wrap { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+  header { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1.25rem; }
+  h1 { font-size: 1.35rem; margin: 0; }
+  h1 span { color: var(--acc); }
+  #health { font-size: .8rem; color: var(--dim); }
+  #health .pill { padding: .1rem .5rem; border-radius: 99px; font-weight: 600; }
+  .pill.ok { background: #123c26; color: var(--ok); }
+  .pill.bad { background: #47181a; color: var(--err); }
+
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .panel h2 { font-size: .95rem; margin: 0 0 .75rem; color: var(--dim); font-weight: 600; }
+
+  #drop { border: 2px dashed var(--line); border-radius: 12px; padding: 2.2rem 1rem;
+          text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  #drop.over { border-color: var(--acc); background: #16203a; }
+  #drop b { color: var(--acc); }
+  #drop small { display: block; margin-top: .4rem; color: var(--dim); }
+
+  .row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+  .row label { font-size: .85rem; color: var(--dim); }
+  input, select, button {
+    background: var(--panel2); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 8px; padding: .45rem .7rem; font-size: .9rem; }
+  input:focus, select:focus { outline: 1px solid var(--acc); }
+  button { cursor: pointer; }
+  button.primary { background: var(--acc); border-color: var(--acc); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  .task { border-top: 1px solid var(--line); padding: .6rem 0; font-size: .88rem; }
+  .task:first-of-type { border-top: 0; }
+  .task .meta { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+  .task .id { font-family: ui-monospace, monospace; color: var(--dim); }
+  .bar { height: 6px; background: var(--line); border-radius: 4px; overflow: hidden; margin-top: .45rem; }
+  .bar i { display: block; height: 100%; background: var(--acc); width: 0; transition: width .4s; }
+  .state { font-weight: 600; }
+  .state.completed { color: var(--ok); } .state.failed { color: var(--err); }
+  .state.processing { color: var(--acc); }
+  .err { color: var(--err); font-size: .82rem; margin-top: .3rem; }
+
+  .cues { max-height: 22rem; overflow: auto; border: 1px solid var(--line);
+          border-radius: 8px; }
+  .cue { display: grid; grid-template-columns: 11rem 1fr; gap: .5rem;
+         padding: .45rem .6rem; border-bottom: 1px solid var(--line); align-items: start; }
+  .cue:last-child { border-bottom: 0; }
+  .cue time { color: var(--dim); font-family: ui-monospace, monospace; font-size: .8rem; padding-top: .45rem; }
+  .cue textarea { width: 100%; background: transparent; color: var(--fg);
+                  border: 1px solid transparent; border-radius: 6px; resize: vertical;
+                  min-height: 2.2rem; font: inherit; padding: .3rem .4rem; }
+  .cue textarea:hover { border-color: var(--line); }
+  .cue textarea:focus { border-color: var(--acc); background: var(--panel2); outline: 0; }
+  .dl { display: flex; gap: .5rem; margin-top: .75rem; }
+  .hint { color: var(--dim); font-size: .8rem; margin-top: .5rem; }
 </style>
 </head>
 <body>
-<h1>video2subtitle</h1>
-<p>Self-hosted video &#8594; subtitles. Any video file or public URL in, SRT/VTT/ASS/TXT out.</p>
-<p>
-  <span class="badge">Web UI ships in v0.1.0</span>
-  <span class="badge"><a href="/docs">API docs</a></span>
-  <span class="badge"><a href="/healthz">health</a></span>
-</p>
+<div class="wrap">
+  <header>
+    <h1>video<span>2</span>subtitle</h1>
+    <span id="health">checking…</span>
+  </header>
+
+  <div class="panel">
+    <h2>上传</h2>
+    <div id="drop">
+      <b>拖拽视频 / 音频到这里</b>，或点击选择文件
+      <small>mp4 · mkv · mov · webm · mp3 · wav · flac · m4a …（≤ 100MB，≤ 2h）</small>
+      <input id="file" type="file" hidden>
+    </div>
+    <div class="row" style="margin-top:.75rem">
+      <label>API Token <input id="token" type="password" size="24" placeholder="V2S_TOKEN"></label>
+      <button id="save-token">记住</button>
+      <span class="hint">与服务的 V2S_TOKEN 一致；只存在本浏览器</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>任务</h2>
+    <div id="tasks"><div class="hint">还没有任务</div></div>
+  </div>
+
+  <div class="panel" id="result-panel" hidden>
+    <h2>字幕预览 <span class="hint" id="result-meta"></span></h2>
+    <div class="cues" id="cues"></div>
+    <div class="dl">
+      <button class="primary" data-fmt="srt">下载 SRT</button>
+      <button data-fmt="vtt">下载 VTT</button>
+      <button data-fmt="ass">下载 ASS</button>
+      <button data-fmt="txt">下载 TXT</button>
+      <span class="hint">预览里可直接改词，下载按当前编辑内容生成</span>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const state = { cues: [], taskId: null, base: "" };
+
+/* ---------- helpers ---------- */
+async function api(path, opts = {}) {
+  const token = $("#token").value.trim();
+  const headers = Object.assign({}, opts.headers || {});
+  if (token) headers["Authorization"] = "Bearer " + token;
+  const resp = await fetch(path, Object.assign({}, opts, { headers }));
+  if (!resp.ok) {
+    let msg = resp.status + " " + resp.statusText;
+    try { const j = await resp.json(); if (j.error) msg += " — " + j.error.code + ": " + j.error.message; } catch {}
+    throw new Error(msg);
+  }
+  return resp;
+}
+const fmtTime = (t, sep) => {
+  const ms = Math.max(0, Math.round(t * 1000));
+  const [h, r1] = [Math.floor(ms / 3600000), ms % 3600000];
+  const [m, r2] = [Math.floor(r1 / 60000), r1 % 60000];
+  const [s, ms2] = [Math.floor(r2 / 1000), r2 % 1000];
+  const p = (n, w) => String(n).padStart(w, "0");
+  return `${p(h,2)}:${p(m,2)}:${p(s,2)}${sep}${p(ms2,3)}`;
+};
+
+/* ---------- health ---------- */
+async function refreshHealth() {
+  const el = $("#health");
+  try {
+    const h = await (await fetch("/healthz")).json();
+    const pill = h.model_ready ? '<span class="pill ok">ready</span>' : '<span class="pill bad">degraded</span>';
+    el.innerHTML = `v${h.version} · ${h.engine.name} · ${pill} · 队列 ${h.queue_depth}`;
+  } catch { el.textContent = "无法连接服务"; }
+}
+
+/* ---------- upload ---------- */
+const drop = $("#drop"), fileInput = $("#file");
+drop.addEventListener("click", () => fileInput.click());
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault(); drop.classList.remove("over");
+  if (e.dataTransfer.files.length) upload(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => { if (fileInput.files.length) upload(fileInput.files[0]); fileInput.value = ""; });
+
+async function upload(file) {
+  try {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    const r = await (await api("/v1/transcripts", { method: "POST", body: fd })).json();
+    addTaskRow(r.task_id, file.name);
+    poll(r.task_id);
+  } catch (e) { alert("上传失败：" + e.message); }
+}
+
+/* ---------- task list & polling ---------- */
+function addTaskRow(id, label, initialState) {
+  if ($("#tasks .hint")) $("#tasks").innerHTML = "";
+  const div = document.createElement("div");
+  div.className = "task"; div.id = "task-" + id;
+  div.innerHTML = `
+    <div class="meta">
+      <span class="state">${initialState || "queued"}</span>
+      <span class="id">${id}</span>
+      <span>${label || ""}</span>
+      <span class="pos"></span>
+      <button class="view" hidden>查看字幕</button>
+    </div>
+    <div class="bar"><i></i></div>
+    <div class="err" hidden></div>`;
+  $("#tasks").prepend(div);
+  div.querySelector(".view").addEventListener("click", () => openResult(id));
+  return div;
+}
+
+const pollers = new Set();
+function poll(id) {
+  if (pollers.has(id)) return;
+  pollers.add(id);
+  const timer = setInterval(async () => {
+    let row = document.getElementById("task-" + id);
+    if (!row) { clearInterval(timer); pollers.delete(id); return; }
+    try {
+      const st = await (await api("/v1/transcripts/" + id)).json();
+      row.querySelector(".state").textContent = st.state;
+      row.querySelector(".state").className = "state " + st.state;
+      row.querySelector(".bar i").style.width = (st.progress || 0) + "%";
+      row.querySelector(".pos").textContent =
+        st.state === "queued" && st.queue_position ? `排队第 ${st.queue_position} 位` :
+        st.state === "processing" ? `${st.progress || 0}%` : "";
+      if (st.state === "failed") {
+        const err = st.error || {};
+        const el = row.querySelector(".err");
+        el.hidden = false;
+        el.textContent = `失败：${err.code || "?"} — ${err.message || ""}`;
+      }
+      if (st.state === "completed" || st.state === "failed") {
+        clearInterval(timer); pollers.delete(id);
+        if (st.state === "completed") {
+          const btn = row.querySelector(".view");
+          btn.hidden = false;
+          if (!state.taskId) openResult(id);
+        }
+      }
+    } catch (e) { /* keep polling on transient errors */ }
+  }, 1500);
+}
+
+/* ---------- result preview & edit ---------- */
+async function openResult(id) {
+  try {
+    const st = await (await api("/v1/transcripts/" + id)).json();
+    if (st.state !== "completed") { alert("任务未完成：" + st.state); return; }
+    state.taskId = id;
+    state.cues = st.result.segments.map((s) => ({ start: s.start, end: s.end, text: s.text }));
+    $("#result-meta").textContent =
+      `${st.result.lang} · ${st.audio_duration_s?.toFixed(1) || "?"}s · 引擎 ${st.engine} · ${state.cues.length} 条`;
+    renderCues();
+    $("#result-panel").hidden = false;
+    $("#result-panel").scrollIntoView({ behavior: "smooth" });
+  } catch (e) { alert(e.message); }
+}
+
+function renderCues() {
+  const box = $("#cues");
+  box.innerHTML = "";
+  state.cues.forEach((cue, i) => {
+    const div = document.createElement("div");
+    div.className = "cue";
+    div.innerHTML = `<time>${fmtTime(cue.start, ",")} → ${fmtTime(cue.end, ",")}</time>`;
+    const ta = document.createElement("textarea");
+    ta.value = cue.text;
+    ta.dataset.i = i;
+    ta.addEventListener("input", () => { state.cues[i].text = ta.value; });
+    div.appendChild(ta);
+    box.appendChild(div);
+  });
+}
+
+/* ---------- downloads (client-side conversion of current cues) ---------- */
+const pad = (n, w) => String(n).padStart(w, "0");
+const ts = (t, sep, msLen) => {
+  const ms = Math.max(0, Math.round(t * 1000));
+  const h = Math.floor(ms / 3600000), r1 = ms % 3600000;
+  const m = Math.floor(r1 / 60000), r2 = r1 % 60000;
+  const s = Math.floor(r2 / 1000), ms2 = r2 % 1000;
+  return `${pad(h,2)}:${pad(m,2)}:${pad(s,2)}${sep}${pad(ms2, msLen)}`;
+};
+const valid = () => state.cues
+  .map((c) => ({ ...c, text: (c.text || "").trim() }))
+  .filter((c) => c.text && c.end > c.start ? true : (c.end = c.start + 0.5, !!c.text));
+
+const converters = {
+  srt: (cues) => cues.map((c, i) =>
+    `${i + 1}\n${ts(c.start, ",", 3)} --> ${ts(c.end, ",", 3)}\n${c.text}\n`).join("\n"),
+  vtt: (cues) => "WEBVTT\n\n" + cues.map((c, i) =>
+    `${i + 1}\n${ts(c.start, ".", 3)} --> ${ts(c.end, ".", 3)}\n${c.text}\n`).join("\n"),
+  ass: (cues) => {
+    const tsAss = (t) => { const v = Math.max(0, Math.round(t * 100));
+      const h = Math.floor(v / 360000), r1 = v % 360000, m = Math.floor(r1 / 6000),
+            s = Math.floor((r1 % 6000) / 100), cs = r1 % 100;
+      return `${h}:${pad(m,2)}:${pad(s,2)}.${pad(cs,2)}`; };
+    return "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n" +
+      "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n" +
+      "Style: Default,Arial,60,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,80,80,60,1\n\n" +
+      "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
+      cues.map((c) => `Dialogue: 0,${tsAss(c.start)},${tsAss(c.end)},Default,,0,0,0,,${c.text}\n`).join("\n");
+  },
+  txt: (cues) => cues.map((c) => c.text + "\n").join(""),
+};
+
+document.querySelectorAll(".dl button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (!state.taskId) return;
+    const fmt = btn.dataset.fmt;
+    const blob = new Blob([converters[fmt](valid())], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${state.taskId}.${fmt}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+});
+
+/* ---------- token persistence & history ---------- */
+$("#token").value = localStorage.getItem("v2s_token") || "";
+$("#save-token").addEventListener("click", () => {
+  localStorage.setItem("v2s_token", $("#token").value.trim());
+  $("#save-token").textContent = "已记住";
+  setTimeout(() => ($("#save-token").textContent = "记住"), 1200);
+});
+
+async function loadHistory() {
+  try {
+    const r = await (await api("/v1/transcripts")).json();
+    const tasks = (r.tasks || []).slice(-8).reverse();
+    for (const t of tasks) {
+      const row = addTaskRow(t.task_id, `${t.audio_duration_s ? t.audio_duration_s.toFixed(0) + "s" : ""}`, t.state);
+      row.querySelector(".bar i").style.width = (t.progress || 0) + "%";
+      if (t.state === "completed") row.querySelector(".view").hidden = false;
+    }
+  } catch { /* token not set yet — fine */ }
+}
+
+refreshHealth();
+setInterval(refreshHealth, 10000);
+loadHistory();
+</script>
 </body>
 </html>

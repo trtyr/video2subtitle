@@ -61,6 +61,7 @@ def make_settings(tmp_path: Path, **overrides) -> Settings:
     s.token = "test-token"
     s.allow_no_token = False
     s.data_dir = tmp_path / "data"
+    s.auto_download = False  # unit tests never touch the network
     for k, v in overrides.items():
         setattr(s, k, v)
     return s

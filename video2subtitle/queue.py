@@ -8,7 +8,7 @@ from .audio import normalize, probe
 from .config import Settings
 from .engines.base import TranscriptionEngine
 from .errors import ApiError, Codes
-from .srt import to_srt
+from .formats import to_srt
 from .store import TaskStore
 
 

@@ -1,10 +1,10 @@
-"""Unit tests — srt formatting, segmentation, chunking."""
+"""Unit tests — subtitle formats, segmentation, chunking."""
 
 import numpy as np
 
 from video2subtitle.engines.chunking import split_chunks
 from video2subtitle.engines.segmentation import build_segments
-from video2subtitle.srt import to_srt
+from video2subtitle.formats import to_srt
 from video2subtitle.engines.base import Segment
 
 

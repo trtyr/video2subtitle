@@ -42,5 +42,6 @@ class Health(BaseModel):
     status: str
     version: str
     engine: dict[str, Any]
+    engines: list[dict[str, Any]] = []
     model_ready: bool
     queue_depth: int

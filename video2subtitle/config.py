@@ -31,6 +31,7 @@ class Settings:
 
         # qwen3 (default) | sensevoice
         self.engine_name: str = env.get("V2S_ENGINE", "qwen3").strip().lower()
+        self.auto_download: bool = env.get("V2S_AUTO_DOWNLOAD", "1") == "1"
 
         self.sensevoice_model_dir: Path = Path(
             env.get(

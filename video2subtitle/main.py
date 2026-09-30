@@ -1,5 +1,6 @@
 """video2subtitle server — FastAPI app: REST API + resident engines + static web."""
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,12 +12,14 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .auth import require_token
 from .config import Settings
-from .engines import create_engine
+from .engines import create_engine, engine_matrix
 from .engines.base import TranscriptionEngine
 from .errors import ApiError, Codes
 from .models import Health, TaskStatus
 from .queue import SerialWorker
 from .store import TaskStore
+
+log = logging.getLogger("video2subtitle")
 
 _SLACK = 64 * 1024  # multipart framing overhead allowance
 
@@ -31,7 +34,17 @@ def create_app(settings: Settings | None = None, engine: TranscriptionEngine | N
             raise RuntimeError("V2S_TOKEN is required (refusing to start without auth)")
         s.data_dir.mkdir(parents=True, exist_ok=True)
         eng = app.state.engine
-        eng.load()  # model loads once, stays resident
+        try:
+            # fresh install: auto-download the model archive on first start
+            if s.auto_download:
+                from .model_dl import ensure_model
+
+                ensure_model("qwen3" if eng.name.startswith("qwen3") else "sensevoice",
+                             s.model_dir_for(eng.name))
+            eng.load()  # model loads once, stays resident
+        except Exception:
+            # degraded mode: server still answers, /healthz shows what's wrong
+            log.exception("engine %s failed to load — serving in degraded mode", eng.name)
         store = TaskStore(s.data_dir)
         store.sweep(s.result_ttl_hours)
         worker = SerialWorker(store, eng, s)
@@ -79,7 +92,7 @@ def create_app(settings: Settings | None = None, engine: TranscriptionEngine | N
             content={"error": {"code": Codes.INTERNAL_ERROR, "message": "internal server error"}},
         )
 
-    # ---------------- health (no auth) ----------------
+    # ---------------- health / version (no auth) ----------------
     @app.get("/healthz", response_model=Health)
     def healthz(request: Request) -> Health:
         eng: TranscriptionEngine = request.app.state.engine
@@ -93,9 +106,14 @@ def create_app(settings: Settings | None = None, engine: TranscriptionEngine | N
                 "sample_rate": eng.sample_rate,
                 "threads": request.app.state.settings.num_threads,
             },
+            engines=engine_matrix(request.app.state.settings),
             model_ready=eng.ready,
             queue_depth=worker.queue_depth() if worker else 0,
         )
+
+    @app.get("/version")
+    def version() -> dict:
+        return {"name": "video2subtitle", "version": __version__}
 
     # ---------------- v1 API ----------------
     @app.post("/v1/transcripts", status_code=202)
