@@ -9,6 +9,7 @@ services:
     environment:
       - V2S_TOKEN=${V2S_TOKEN:?set V2S_TOKEN in your shell or .env file}
       - V2S_ENGINE=${V2S_ENGINE:-qwen3}
+      - V2S_THREADS=${V2S_THREADS:-8}
       - V2S_GH_MIRROR=${V2S_GH_MIRROR:-}
       - V2S_AUTO_DOWNLOAD=${V2S_AUTO_DOWNLOAD:-1}
     volumes:

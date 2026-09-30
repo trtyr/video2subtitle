@@ -50,7 +50,7 @@ class Settings:
         self.max_duration_s: int = _int("V2S_MAX_DURATION_S", 7200)
         self.result_ttl_hours: int = _int("V2S_RESULT_TTL_HOURS", 168)
         self.queue_timeout_s: int = _int("V2S_QUEUE_TIMEOUT_S", 1800)
-        self.num_threads: int = _int("V2S_THREADS", os.cpu_count() or 4)
+        self.num_threads: int = _int("V2S_THREADS", min(os.cpu_count() or 4, 8))
         self.chunk_seconds: float = _float("V2S_CHUNK_SECONDS", 30.0)
         self.qwen3_chunk_seconds: float = _float("V2S_QWEN3_CHUNK_SECONDS", 15.0)
         self.qwen3_max_new_tokens: int = _int("V2S_QWEN3_MAX_NEW_TOKENS", 256)
